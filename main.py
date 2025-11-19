@@ -3,6 +3,7 @@ import math
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
+import matplotlib.pyplot as plt
 
 # Updated Black-Scholes function with dividend yield (q)
 def black_scholes_option_price_and_greeks(S, K, T, r, q, sigma, option_type='call'):
@@ -74,9 +75,19 @@ for i, leg in enumerate(st.session_state.legs):
             st.rerun()
 
 # Select which metrics to plot (Greeks + Payoff)
-st.sidebar.header("Select to Plot")
-plot_options = ["Delta", "Gamma", "Theta", "Vega", "Rho", "Payoff"]
-selected_plots = st.sidebar.multiselect("Choose Greeks/Payoff (Each on Separate Chart)", plot_options, default=["Payoff"])
+st.sidebar.header("Select to Plot (on Same Graph)")
+plot_options = ["Payoff", "Delta", "Gamma", "Theta", "Vega", "Rho"]
+selected_plots = st.sidebar.multiselect("Choose to Overlay (Each with Own Scale)", plot_options, default=["Payoff"])
+
+# Fixed colors for each metric
+colors = {
+    'Payoff': 'black',
+    'Delta': 'blue',
+    'Gamma': 'green',
+    'Theta': 'red',
+    'Vega': 'purple',
+    'Rho': 'orange'
+}
 
 # Compute combined results
 try:
@@ -132,19 +143,45 @@ try:
                     combined_value += sign * value
                 plot_data[plot_name].append(combined_value)
         
-        # Display each selected plot in its own separate chart with its own scale
+        # Display combined plot with multiple y-axes (each metric has its own scale)
         if selected_plots:
-            st.header("Combined Plots vs. Underlying Price (S)")
-            for plot_name in selected_plots:
-                with st.expander(f"{plot_name} vs. S (Click to Expand/Collapse)", expanded=True):
-                    df = pd.DataFrame({plot_name: plot_data[plot_name]}, index=S_range)
-                    st.line_chart(df, use_container_width=True, color="#0000FF")  # Fixed color: blue for consistency
-                    st.caption(f"Combined {plot_name} for the strategy (own scale for visibility).")
+            st.header("Combined Strategy Plot vs. Underlying Price (S)")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            axes = [ax]  # List of axes, starting with the primary
+            lines = []  # To collect lines for legend
+            
+            for i, plot_name in enumerate(selected_plots):
+                if i == 0:
+                    # First metric on primary axis (left)
+                    line, = ax.plot(S_range, plot_data[plot_name], color=colors[plot_name], label=plot_name)
+                    ax.set_ylabel(plot_name, color=colors[plot_name])
+                    ax.tick_params(axis='y', colors=colors[plot_name])
+                else:
+                    # Additional metrics on new twinx axes (right, spaced out)
+                    new_ax = ax.twinx()
+                    new_ax.spines['right'].set_position(('axes', 1.0 + 0.1 * (i - 1)))
+                    line, = new_ax.plot(S_range, plot_data[plot_name], color=colors[plot_name], label=plot_name)
+                    new_ax.set_ylabel(plot_name, color=colors[plot_name])
+                    new_ax.tick_params(axis='y', colors=colors[plot_name])
+                    axes.append(new_ax)
+                lines.append(line)
+            
+            # Set common x-label and title
+            ax.set_xlabel('Underlying Price (S)')
+            ax.set_title('Combined Metrics (Each with Own Y-Scale)')
+            ax.grid(True)
+            
+            # Add legend
+            ax.legend(lines, [line.get_label() for line in lines], loc='upper left')
+            
+            # Display the plot in Streamlit
+            st.pyplot(fig)
+            st.caption("Each metric is plotted with its own y-axis scale for better visibility (primary on left, others on right). Colors are fixed for each metric.")
 except ValueError as e:
     st.error(f"Error: {e}")
 
 # Instructions for deployment
 st.sidebar.markdown("### Deployment Notes")
 st.sidebar.markdown("Save this as `app.py` (or `main.py`). Create `requirements.txt` with:")
-st.sidebar.code("streamlit\nnumpy\nscipy\npandas")  # Removed matplotlib since we're using st.line_chart
+st.sidebar.code("streamlit\nnumpy\nscipy\npandas\nmatplotlib")
 st.sidebar.markdown("Upload to GitHub and deploy on Streamlit Cloud.")
