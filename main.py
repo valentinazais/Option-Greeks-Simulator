@@ -76,7 +76,7 @@ for i, leg in enumerate(st.session_state.legs):
 # Select which metrics to plot (Greeks + Payoff)
 st.sidebar.header("Select to Plot")
 plot_options = ["Delta", "Gamma", "Theta", "Vega", "Rho", "Payoff"]
-selected_plots = st.sidebar.multiselect("Choose Greeks/Payoff (Plotted Together)", plot_options, default=["Payoff"])
+selected_plots = st.sidebar.multiselect("Choose Greeks/Payoff (Each on Separate Chart)", plot_options, default=["Payoff"])
 
 # Compute combined results
 try:
@@ -112,11 +112,12 @@ try:
         
         # Generate data for plots (vary S)
         S_range = np.linspace(max(50, S - 50), S + 50, 100)
-        plot_df = pd.DataFrame(index=S_range)
         
-        for plot_name in selected_plots:
-            values = []
-            for s in S_range:
+        # Dictionary to hold data for each plot
+        plot_data = {plot_name: [] for plot_name in selected_plots}
+        
+        for s in S_range:
+            for plot_name in selected_plots:
                 combined_value = 0
                 for leg in st.session_state.legs:
                     sign = leg['position']
@@ -129,19 +130,21 @@ try:
                         res = black_scholes_option_price_and_greeks(s, leg['strike'], T, r, q, sigma, leg['type'])
                         value = res.get(plot_name.lower(), 0)
                     combined_value += sign * value
-                values.append(combined_value)
-            plot_df[plot_name] = values
+                plot_data[plot_name].append(combined_value)
         
-        # Display combined plot using Streamlit's native line chart (multiple lines in different colors)
-        if not plot_df.empty:
+        # Display each selected plot in its own separate chart with its own scale
+        if selected_plots:
             st.header("Combined Plots vs. Underlying Price (S)")
-            st.line_chart(plot_df, use_container_width=True)
-            st.caption("Multiple selected metrics are plotted together with different colors.")
+            for plot_name in selected_plots:
+                with st.expander(f"{plot_name} vs. S (Click to Expand/Collapse)", expanded=True):
+                    df = pd.DataFrame({plot_name: plot_data[plot_name]}, index=S_range)
+                    st.line_chart(df, use_container_width=True, color="#0000FF")  # Fixed color: blue for consistency
+                    st.caption(f"Combined {plot_name} for the strategy (own scale for visibility).")
 except ValueError as e:
     st.error(f"Error: {e}")
 
 # Instructions for deployment
 st.sidebar.markdown("### Deployment Notes")
 st.sidebar.markdown("Save this as `app.py` (or `main.py`). Create `requirements.txt` with:")
-st.sidebar.code("streamlit\nnumpy\nscipy\nmatplotlib\npandas")  # Added pandas for DataFrame
+st.sidebar.code("streamlit\nnumpy\nscipy\npandas")  # Removed matplotlib since we're using st.line_chart
 st.sidebar.markdown("Upload to GitHub and deploy on Streamlit Cloud.")
