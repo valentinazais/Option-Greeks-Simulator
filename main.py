@@ -42,63 +42,15 @@ def black_scholes_option_price_and_greeks(S, K, T, r, q, sigma, option_type='cal
     }
 
 # Streamlit app
-st.title("Black-Scholes Option Strategy Dashboard")
-
-# Initialize session state for parameters
-if 'S' not in st.session_state:
-    st.session_state['S'] = 100.0
-if 'T' not in st.session_state:
-    st.session_state['T'] = 1.0
-if 'r' not in st.session_state:
-    st.session_state['r'] = 0.05
-if 'q' not in st.session_state:
-    st.session_state['q'] = 0.0
-if 'sigma' not in st.session_state:
-    st.session_state['sigma'] = 0.2
-
-# Callbacks to update session state
-def update_S():
-    st.session_state['S'] = st.session_state['num_S']
-
-def update_T():
-    st.session_state['T'] = st.session_state['num_T']
-
-def update_r():
-    st.session_state['r'] = st.session_state['num_r']
-
-def update_q():
-    st.session_state['q'] = st.session_state['num_q']
-
-def update_sigma():
-    st.session_state['sigma'] = st.session_state['num_sigma']
+st.title("Black-Scholes Option Strategy Dashboard (with Dividend Yield)")
 
 # Sidebar for shared parameters
 st.sidebar.header("Shared Parameters")
-
-# Current Underlying Price (S)
-st.sidebar.number_input("Enter S manually", min_value=50.0, max_value=150.0, value=st.session_state['S'], step=1.0, key='num_S', on_change=update_S)
-st.sidebar.slider("Current Underlying Price (S)", min_value=50.0, max_value=150.0, value=st.session_state['S'], step=1.0, key='slider_S', on_change=update_S)
-S = st.session_state['S']
-
-# Time to Maturity (T)
-st.sidebar.number_input("Enter T manually", min_value=0.01, max_value=5.0, value=st.session_state['T'], step=0.01, key='num_T', on_change=update_T)
-st.sidebar.slider("Time to Maturity (T)", min_value=0.01, max_value=5.0, value=st.session_state['T'], step=0.01, key='slider_T', on_change=update_T)
-T = st.session_state['T']
-
-# Risk-Free Rate (r)
-st.sidebar.number_input("Enter r manually", min_value=0.0, max_value=0.2, value=st.session_state['r'], step=0.01, key='num_r', on_change=update_r)
-st.sidebar.slider("Risk-Free Rate (r)", min_value=0.0, max_value=0.2, value=st.session_state['r'], step=0.01, key='slider_r', on_change=update_r)
-r = st.session_state['r']
-
-# Dividend Yield (q)
-st.sidebar.number_input("Enter q manually", min_value=0.0, max_value=0.2, value=st.session_state['q'], step=0.01, key='num_q', on_change=update_q)
-st.sidebar.slider("Dividend Yield (q)", min_value=0.0, max_value=0.2, value=st.session_state['q'], step=0.01, key='slider_q', on_change=update_q)
-q = st.session_state['q']
-
-# Volatility (sigma)
-st.sidebar.number_input("Enter sigma manually", min_value=0.01, max_value=1.0, value=st.session_state['sigma'], step=0.01, key='num_sigma', on_change=update_sigma)
-st.sidebar.slider("Volatility (sigma)", min_value=0.01, max_value=1.0, value=st.session_state['sigma'], step=0.01, key='slider_sigma', on_change=update_sigma)
-sigma = st.session_state['sigma']
+S = st.sidebar.slider("Current Underlying Price (S)", min_value=50.0, max_value=150.0, value=100.0, step=1.0)
+T = st.sidebar.slider("Time to Maturity (T)", min_value=0.01, max_value=5.0, value=1.0, step=0.01)
+r = st.sidebar.slider("Risk-Free Rate (r)", min_value=0.0, max_value=0.2, value=0.05, step=0.01)
+q = st.sidebar.slider("Dividend Yield (q)", min_value=0.0, max_value=0.2, value=0.0, step=0.01)
+sigma = st.sidebar.slider("Volatility (sigma)", min_value=0.01, max_value=1.0, value=0.2, step=0.01)
 
 # Manage option legs using session state
 if 'legs' not in st.session_state:
@@ -129,10 +81,6 @@ for i, leg in enumerate(st.session_state.legs):
 st.sidebar.header("Select to Plot (on Same Graph)")
 plot_options = ["Payoff", "Delta", "Gamma", "Theta", "Vega", "Rho"]
 selected_plots = st.sidebar.multiselect("Choose to Overlay (Each with Own Scale)", plot_options, default=["Payoff"])
-
-# Display option for separate graphs
-st.sidebar.header("Display Options")
-show_separate = st.sidebar.button("Show Separate Graphs for Each Greek with Payoff")
 
 # Fixed colors for each metric
 colors = {
@@ -180,25 +128,22 @@ try:
         S_range = np.linspace(max(50, S - 50), S + 50, 100)
         
         # Dictionary to hold data for each plot
-        plot_data = {plot_name: [] for plot_name in plot_options}  # Compute all to have them ready
+        plot_data = {plot_name: [] for plot_name in selected_plots}
         
         for s in S_range:
-            for plot_name in plot_options:
-                if plot_name == 'Payoff':
-                    combined_value = 0
-                    for leg in st.session_state.legs:
-                        sign = leg['position']
+            for plot_name in selected_plots:
+                combined_value = 0
+                for leg in st.session_state.legs:
+                    sign = leg['position']
+                    if plot_name == 'Payoff':
                         if leg['type'] == 'call':
                             value = max(s - leg['strike'], 0)
                         else:
                             value = max(leg['strike'] - s, 0)
-                        combined_value += sign * value
-                else:
-                    combined_value = 0
-                    for leg in st.session_state.legs:
+                    else:
                         res = black_scholes_option_price_and_greeks(s, leg['strike'], T, r, q, sigma, leg['type'])
                         value = res.get(plot_name.lower(), 0)
-                        combined_value += leg['position'] * value
+                    combined_value += sign * value
                 plot_data[plot_name].append(combined_value)
         
         # Display combined plot with multiple y-axes (each metric has its own scale, but hide y-axes for Greeks)
@@ -238,39 +183,11 @@ try:
             # Display the plot in Streamlit
             st.pyplot(fig)
             st.caption("Each metric is plotted with its own y-axis scale for better visibility (primary on left; y-axes for Greeks are hidden to reduce clutter). Colors are fixed for each metric. Plot styled for better aesthetics.")
-        
-        # Separate graphs when button is clicked
-        if show_separate:
-            greeks_selected = [p for p in selected_plots if p in ["Delta", "Gamma", "Theta", "Vega", "Rho"]]
-            if not greeks_selected:
-                st.info("No Greeks selected for separate plots.")
-            else:
-                st.header("Separate Graphs for Each Greek with Payoff")
-                for greek in greeks_selected:
-                    st.subheader(f"{greek} and Payoff vs. Underlying Price (S)")
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    
-                    # Plot Payoff on left axis
-                    ax.plot(S_range, plot_data["Payoff"], color=colors['Payoff'], label='Payoff')
-                    ax.set_ylabel('Payoff', color=colors['Payoff'])
-                    ax.tick_params(axis='y', colors=colors['Payoff'])
-                    
-                    # Plot Greek on right axis
-                    ax2 = ax.twinx()
-                    ax2.plot(S_range, plot_data[greek], color=colors[greek], label=greek)
-                    ax2.set_ylabel(greek, color=colors[greek])
-                    ax2.tick_params(axis='y', colors=colors[greek])
-                    
-                    ax.set_xlabel('Underlying Price (S)')
-                    ax.set_title(f'{greek} and Payoff')
-                    ax.grid(True)
-                    
-                    # Combined legend
-                    lines = ax.get_lines() + ax2.get_lines()
-                    labels = [l.get_label() for l in lines]
-                    ax.legend(lines, labels, loc='upper left')
-                    
-                    st.pyplot(fig)
-                    st.caption(f"Payoff (left axis) and {greek} (right axis) with own scales.")
 except ValueError as e:
     st.error(f"Error: {e}")
+
+# Instructions for deployment
+st.sidebar.markdown("### Deployment Notes")
+st.sidebar.markdown("Save this as `app.py` (or `main.py`). Create `requirements.txt` with:")
+st.sidebar.code("streamlit\nnumpy\nscipy\npandas\nmatplotlib")
+st.sidebar.markdown("Upload to GitHub and deploy on Streamlit Cloud.")
