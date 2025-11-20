@@ -1,14 +1,4 @@
-st.line_chart
-Streamlit Version
-Version 1.51.0
-Display a line chart.
-
-This is syntax-sugar around st.altair_chart. The main difference is this command uses the data's own column and indices to figure out the chart's Altair spec. As a result this is easier to use for many "just plot this" scenarios, while being less customizable.
-
-Function signature[source]
-st.line_chart(data=None, *, x=None, y=None, x_label=None, y_label=None, color=None, width="stretch", height="content", use_container_width=None)"
-
-"import streamlit as st
+import streamlit as st
 import math
 import numpy as np
 import pandas as pd
