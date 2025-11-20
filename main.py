@@ -3,10 +3,6 @@ import math
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
-import matplotlib.pyplot as plt
-
-# Apply a nicer style to Matplotlib to make it look more like Streamlit's aesthetic
-plt.style.use('ggplot')
 
 # Updated Black-Scholes function with dividend yield (q)
 def black_scholes_option_price_and_greeks(S, K, T, r, q, sigma, option_type='call'):
@@ -80,16 +76,16 @@ for i, leg in enumerate(st.session_state.legs):
 # Select which metrics to plot (Greeks + Payoff)
 st.sidebar.header("Select to Plot (on Same Graph)")
 plot_options = ["Payoff", "Delta", "Gamma", "Theta", "Vega", "Rho"]
-selected_plots = st.sidebar.multiselect("Choose to Overlay (Each with Own Scale)", plot_options, default=["Payoff"])
+selected_plots = st.sidebar.multiselect("Choose to Overlay (Shared Scale)", plot_options, default=["Payoff"])
 
 # Fixed colors for each metric
 colors = {
-    'Payoff': 'black',
-    'Delta': 'blue',
-    'Gamma': 'green',
-    'Theta': 'red',
-    'Vega': 'purple',
-    'Rho': 'orange'
+    'Payoff': '#000000',  # black
+    'Delta': '#0000FF',   # blue
+    'Gamma': '#008000',   # green
+    'Theta': '#FF0000',   # red
+    'Vega': '#800080',    # purple
+    'Rho': '#FFA500'      # orange
 }
 
 # Compute combined results
@@ -146,43 +142,26 @@ try:
                     combined_value += sign * value
                 plot_data[plot_name].append(combined_value)
         
-        # Display combined plot with multiple y-axes (each metric has its own scale, but hide y-axes for Greeks)
+        # Display combined plot using Streamlit's line_chart (shared y-scale)
         if selected_plots:
             st.header("Combined Strategy Plot vs. Underlying Price (S)")
-            fig, ax = plt.subplots(figsize=(10, 6))
-            axes = [ax]  # List of axes, starting with the primary
-            lines = []  # To collect lines for legend
-            
-            for i, plot_name in enumerate(selected_plots):
-                if i == 0:
-                    # First metric on primary axis (left), show y-axis
-                    line, = ax.plot(S_range, plot_data[plot_name], color=colors[plot_name], label=plot_name)
-                    ax.set_ylabel(plot_name, color=colors[plot_name])
-                    ax.tick_params(axis='y', colors=colors[plot_name])
-                else:
-                    # Additional metrics on new twinx axes (right, spaced out), but hide y-axis if it's a Greek
-                    new_ax = ax.twinx()
-                    new_ax.spines['right'].set_position(('axes', 1.0 + 0.1 * (i - 1)))
-                    line, = new_ax.plot(S_range, plot_data[plot_name], color=colors[plot_name], label=plot_name)
-                    if plot_name != 'Payoff':  # Hide y-axis for Greeks (anything not Payoff)
-                        new_ax.yaxis.set_visible(False)
-                    else:
-                        new_ax.set_ylabel(plot_name, color=colors[plot_name])
-                        new_ax.tick_params(axis='y', colors=colors[plot_name])
-                    axes.append(new_ax)
-                lines.append(line)
-            
-            # Set common x-label and title
-            ax.set_xlabel('Underlying Price (S)')
-            ax.set_title('Combined Metrics (Each with Own Y-Scale)')
-            ax.grid(True)
-            
-            # Add legend
-            ax.legend(lines, [line.get_label() for line in lines], loc='upper left')
-            
-            # Display the plot in Streamlit
-            st.pyplot(fig)
-            st.caption("Each metric is plotted with its own y-axis scale for better visibility (primary on left; y-axes for Greeks are hidden to reduce clutter). Colors are fixed for each metric. Plot styled for better aesthetics.")
+            # Create DataFrame with S_range as index
+            df = pd.DataFrame(plot_data, index=S_range)
+            # Plot using st.line_chart with custom colors
+            plot_colors = [colors[plot_name] for plot_name in selected_plots]
+            st.line_chart(
+                df,
+                x_label="Underlying Price (S)",
+                y_label="Values (Shared Scale)",
+                color=plot_colors,
+                use_container_width=True
+            )
+            st.caption("All selected metrics are plotted on the same graph with a shared y-axis scale. This may cause some lines to appear flat if scales differ significantly (e.g., Payoff vs. Greeks). Select subsets to zoom in on specific scales. Colors are fixed for each metric.")
 except ValueError as e:
     st.error(f"Error: {e}")
 
+# Instructions for deployment
+st.sidebar.markdown("### Deployment Notes")
+st.sidebar.markdown("Save this as `app.py` (or `main.py`). Create `requirements.txt` with:")
+st.sidebar.code("streamlit\nnumpy\nscipy\npandas")
+st.sidebar.markdown("Upload to GitHub and deploy on Streamlit Cloud.")
