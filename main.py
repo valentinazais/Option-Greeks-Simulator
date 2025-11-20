@@ -150,9 +150,9 @@ for i, leg in enumerate(st.session_state.legs):
             del st.session_state.legs[i]
             st.rerun()
 
-# Select which metrics to plot (Greeks + Payoff + Convex Premium)
+# Select which metrics to plot (Greeks + Payoff + Time Value)
 st.sidebar.header("Select to Plot (on Same Graph)")
-plot_options = ["Payoff", "Delta", "Gamma", "Theta", "Vega", "Rho", "Convex Premium"]
+plot_options = ["Payoff", "Delta", "Gamma", "Theta", "Vega", "Rho", "Time Value"]
 selected_plots = st.sidebar.multiselect("Choose to Overlay (Each with Own Scale)", plot_options, default=["Payoff"])
 
 # Display option for separate graphs
@@ -164,7 +164,7 @@ if 'single_plots' not in st.session_state:
     st.session_state.single_plots = []  # List of metrics to plot individually
 
 st.sidebar.header("Add Single Metric + Payoff Graph")
-single_metric = st.sidebar.selectbox("Select Metric", ["Delta", "Gamma", "Theta", "Vega", "Rho", "Convex Premium"], key="single_metric")
+single_metric = st.sidebar.selectbox("Select Metric", ["Delta", "Gamma", "Theta", "Vega", "Rho", "Time Value"], key="single_metric")
 if st.sidebar.button("Add Graph for this Metric with Payoff"):
     if single_metric not in st.session_state.single_plots:
         st.session_state.single_plots.append(single_metric)
@@ -182,15 +182,15 @@ if st.session_state.single_plots:
                 del st.session_state.single_plots[i]
                 st.rerun()
 
-# Fixed colors for each metric
+# Fixed colors for each metric (darker colors)
 colors = {
-    'Payoff': 'black',
-    'Delta': 'blue',
-    'Gamma': 'green',
-    'Theta': 'red',
-    'Vega': 'purple',
-    'Rho': 'orange',
-    'Convex Premium': 'cyan'
+    'Payoff': '#1a1a1a',  # Very dark gray (almost black)
+    'Time Value': '#006666',  # Dark cyan
+    'Delta': '#00008b',  # Dark blue
+    'Gamma': '#006400',  # Dark green
+    'Theta': '#8b0000',  # Dark red
+    'Vega': '#4b0082',  # Dark purple (indigo)
+    'Rho': '#cc6600'  # Dark orange
 }
 
 # Compute combined results
@@ -201,7 +201,7 @@ try:
         # Compute current values (at fixed S)
         combined_results = {'price': 0, 'delta': 0, 'gamma': 0, 'theta': 0, 'vega': 0, 'rho': 0}
         combined_payoff = 0  # Payoff at expiration assuming S_T = current S
-        combined_convex_premium = 0
+        combined_time_value = 0
         
         for leg in st.session_state.legs:
             res = black_scholes_option_price_and_greeks(S, leg['strike'], T, r, q, sigma, leg['type'])
@@ -216,17 +216,18 @@ try:
                 payoff_leg = max(leg['strike'] - S, 0)
             combined_payoff += sign * payoff_leg
             
-            # Convex premium for this leg
-            premium_leg = res['price'] - payoff_leg
-            combined_convex_premium += sign * premium_leg
+            # Time value for this leg (Premium = Intrinsic Value + Time Value)
+            # So Time Value = Premium - Intrinsic Value = Price - Payoff
+            time_value_leg = res['price'] - payoff_leg
+            combined_time_value += sign * time_value_leg
         
         # Display numerical outputs
         st.header("Combined Strategy Values (at Current S)")
         col1, col2 = st.columns(2)
         with col1:
             st.metric("Net Premium (Total Price)", f"{combined_results['price']:.4f}")
-            st.metric("Net Payoff (at Expiration, S_T = Current S)", f"{combined_payoff:.4f}")
-            st.metric("Convex Premium (Net Time Premium)", f"{combined_convex_premium:.4f}")
+            st.metric("Net Payoff (Intrinsic Value at Current S)", f"{combined_payoff:.4f}")
+            st.metric("Time Value (Premium - Intrinsic Value)", f"{combined_time_value:.4f}")
         with col2:
             for greek in ['delta', 'gamma', 'theta', 'vega', 'rho']:
                 st.metric(greek.capitalize(), f"{combined_results[greek]:.4f}")
@@ -248,7 +249,7 @@ try:
                         else:
                             value = max(leg['strike'] - s, 0)
                         combined_value += sign * value
-                elif plot_name == 'Convex Premium':
+                elif plot_name == 'Time Value':
                     combined_value = 0
                     for leg in st.session_state.legs:
                         res = black_scholes_option_price_and_greeks(s, leg['strike'], T, r, q, sigma, leg['type'])
@@ -257,8 +258,8 @@ try:
                             intrinsic = max(s - leg['strike'], 0)
                         else:
                             intrinsic = max(leg['strike'] - s, 0)
-                        premium_leg = price - intrinsic
-                        combined_value += leg['position'] * premium_leg
+                        time_value_leg = price - intrinsic
+                        combined_value += leg['position'] * time_value_leg
                 else:
                     combined_value = 0
                     for leg in st.session_state.legs:
