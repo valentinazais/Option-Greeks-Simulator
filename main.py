@@ -150,36 +150,33 @@ for i, leg in enumerate(st.session_state.legs):
             del st.session_state.legs[i]
             st.rerun()
 
-# Select which metrics to plot (Greeks + Payoff)
+# Select which metrics to plot (Greeks + Payoff + Convex Premium)
 st.sidebar.header("Select to Plot (on Same Graph)")
-plot_options = ["Payoff", "Delta", "Gamma", "Theta", "Vega", "Rho"]
+plot_options = ["Payoff", "Delta", "Gamma", "Theta", "Vega", "Rho", "Convex Premium"]
 selected_plots = st.sidebar.multiselect("Choose to Overlay (Each with Own Scale)", plot_options, default=["Payoff"])
 
 # Display option for separate graphs
 st.sidebar.header("Display Options")
-show_separate = st.sidebar.checkbox("Show Separate Graphs for Each Greek with Payoff")  # Changed to checkbox for persistence
+show_separate = st.sidebar.checkbox("Show Separate Graphs for Each Metric with Payoff")  # Generalized
 
-# New: Option to show convex premium
-show_convex_premium = st.sidebar.checkbox("Show Convex Premium (Net Time Premium due to Convexity)")
-
-# New: Add button to add a new single Greek + Payoff graph
+# New: Add button to add a new single Metric + Payoff graph
 if 'single_plots' not in st.session_state:
-    st.session_state.single_plots = []  # List of Greeks to plot individually
+    st.session_state.single_plots = []  # List of metrics to plot individually
 
-st.sidebar.header("Add Single Greek + Payoff Graph")
-single_greek = st.sidebar.selectbox("Select Greek", ["Delta", "Gamma", "Theta", "Vega", "Rho"], key="single_greek")
-if st.sidebar.button("Add Graph for this Greek with Payoff"):
-    if single_greek not in st.session_state.single_plots:
-        st.session_state.single_plots.append(single_greek)
+st.sidebar.header("Add Single Metric + Payoff Graph")
+single_metric = st.sidebar.selectbox("Select Metric", ["Delta", "Gamma", "Theta", "Vega", "Rho", "Convex Premium"], key="single_metric")
+if st.sidebar.button("Add Graph for this Metric with Payoff"):
+    if single_metric not in st.session_state.single_plots:
+        st.session_state.single_plots.append(single_metric)
     st.rerun()
 
 # Display and remove single plots
 if st.session_state.single_plots:
     st.sidebar.header("Added Single Graphs")
-    for i, greek in enumerate(st.session_state.single_plots):
+    for i, metric in enumerate(st.session_state.single_plots):
         col1, col2 = st.sidebar.columns([3, 1])
         with col1:
-            st.write(f"{greek} with Payoff")
+            st.write(f"{metric} with Payoff")
         with col2:
             if st.button("Remove", key=f"remove_single_{i}"):
                 del st.session_state.single_plots[i]
@@ -192,7 +189,8 @@ colors = {
     'Gamma': 'green',
     'Theta': 'red',
     'Vega': 'purple',
-    'Rho': 'orange'
+    'Rho': 'orange',
+    'Convex Premium': 'cyan'
 }
 
 # Compute combined results
@@ -203,6 +201,7 @@ try:
         # Compute current values (at fixed S)
         combined_results = {'price': 0, 'delta': 0, 'gamma': 0, 'theta': 0, 'vega': 0, 'rho': 0}
         combined_payoff = 0  # Payoff at expiration assuming S_T = current S
+        combined_convex_premium = 0
         
         for leg in st.session_state.legs:
             res = black_scholes_option_price_and_greeks(S, leg['strike'], T, r, q, sigma, leg['type'])
@@ -216,9 +215,10 @@ try:
             else:
                 payoff_leg = max(leg['strike'] - S, 0)
             combined_payoff += sign * payoff_leg
-        
-        # New: Compute convex premium (net time premium due to convexity)
-        convex_premium = combined_results['price'] - combined_payoff
+            
+            # Convex premium for this leg
+            premium_leg = res['price'] - payoff_leg
+            combined_convex_premium += sign * premium_leg
         
         # Display numerical outputs
         st.header("Combined Strategy Values (at Current S)")
@@ -226,8 +226,7 @@ try:
         with col1:
             st.metric("Net Premium (Total Price)", f"{combined_results['price']:.4f}")
             st.metric("Net Payoff (at Expiration, S_T = Current S)", f"{combined_payoff:.4f}")
-            if show_convex_premium:
-                st.metric("Convex Premium (Net Time Premium)", f"{convex_premium:.4f}")
+            st.metric("Convex Premium (Net Time Premium)", f"{combined_convex_premium:.4f}")
         with col2:
             for greek in ['delta', 'gamma', 'theta', 'vega', 'rho']:
                 st.metric(greek.capitalize(), f"{combined_results[greek]:.4f}")
@@ -249,6 +248,17 @@ try:
                         else:
                             value = max(leg['strike'] - s, 0)
                         combined_value += sign * value
+                elif plot_name == 'Convex Premium':
+                    combined_value = 0
+                    for leg in st.session_state.legs:
+                        res = black_scholes_option_price_and_greeks(s, leg['strike'], T, r, q, sigma, leg['type'])
+                        price = res['price']
+                        if leg['type'] == 'call':
+                            intrinsic = max(s - leg['strike'], 0)
+                        else:
+                            intrinsic = max(leg['strike'] - s, 0)
+                        premium_leg = price - intrinsic
+                        combined_value += leg['position'] * premium_leg
                 else:
                     combined_value = 0
                     for leg in st.session_state.legs:
@@ -294,13 +304,13 @@ try:
         
         # Separate graphs if checkbox is selected
         if show_separate:
-            greeks_selected = [p for p in selected_plots if p in ["Delta", "Gamma", "Theta", "Vega", "Rho"]]
-            if not greeks_selected:
-                st.info("No Greeks selected for separate plots.")
+            metrics_selected = [p for p in selected_plots if p != "Payoff"]
+            if not metrics_selected:
+                st.info("No metrics selected for separate plots.")
             else:
-                st.header("Separate Graphs for Each Greek with Payoff")
-                for greek in greeks_selected:
-                    st.subheader(f"{greek} and Payoff vs. Underlying Price (S)")
+                st.header("Separate Graphs for Each Metric with Payoff")
+                for metric in metrics_selected:
+                    st.subheader(f"{metric} and Payoff vs. Underlying Price (S)")
                     fig, ax = plt.subplots(figsize=(10, 6))
                     
                     # Plot Payoff on left axis
@@ -308,14 +318,14 @@ try:
                     ax.set_ylabel('Payoff', color=colors['Payoff'])
                     ax.tick_params(axis='y', colors=colors['Payoff'])
                     
-                    # Plot Greek on right axis
+                    # Plot Metric on right axis
                     ax2 = ax.twinx()
-                    ax2.plot(S_range, plot_data[greek], color=colors[greek], label=greek)
-                    ax2.set_ylabel(greek, color=colors[greek])
-                    ax2.tick_params(axis='y', colors=colors[greek])
+                    ax2.plot(S_range, plot_data[metric], color=colors[metric], label=metric)
+                    ax2.set_ylabel(metric, color=colors[metric])
+                    ax2.tick_params(axis='y', colors=colors[metric])
                     
                     ax.set_xlabel('Underlying Price (S)')
-                    ax.set_title(f'{greek} and Payoff')
+                    ax.set_title(f'{metric} and Payoff')
                     ax.grid(True)
                     
                     # Combined legend
@@ -324,13 +334,13 @@ try:
                     ax.legend(lines, labels, loc='upper left')
                     
                     st.pyplot(fig)
-                    st.caption(f"Payoff (left axis) and {greek} (right axis) with own scales.")
+                    st.caption(f"Payoff (left axis) and {metric} (right axis) with own scales.")
         
-        # New: Display added single Greek + Payoff graphs
+        # Display added single Metric + Payoff graphs
         if st.session_state.single_plots:
-            st.header("Added Single Greek + Payoff Graphs")
-            for greek in st.session_state.single_plots:
-                st.subheader(f"{greek} and Payoff vs. Underlying Price (S)")
+            st.header("Added Single Metric + Payoff Graphs")
+            for metric in st.session_state.single_plots:
+                st.subheader(f"{metric} and Payoff vs. Underlying Price (S)")
                 fig, ax = plt.subplots(figsize=(10, 6))
                 
                 # Plot Payoff on left axis
@@ -338,14 +348,14 @@ try:
                 ax.set_ylabel('Payoff', color=colors['Payoff'])
                 ax.tick_params(axis='y', colors=colors['Payoff'])
                 
-                # Plot Greek on right axis
+                # Plot Metric on right axis
                 ax2 = ax.twinx()
-                ax2.plot(S_range, plot_data[greek], color=colors[greek], label=greek)
-                ax2.set_ylabel(greek, color=colors[greek])
-                ax2.tick_params(axis='y', colors=colors[greek])
+                ax2.plot(S_range, plot_data[metric], color=colors[metric], label=metric)
+                ax2.set_ylabel(metric, color=colors[metric])
+                ax2.tick_params(axis='y', colors=colors[metric])
                 
                 ax.set_xlabel('Underlying Price (S)')
-                ax.set_title(f'{greek} and Payoff')
+                ax.set_title(f'{metric} and Payoff')
                 ax.grid(True)
                 
                 # Combined legend
@@ -354,6 +364,6 @@ try:
                 ax.legend(lines, labels, loc='upper left')
                 
                 st.pyplot(fig)
-                st.caption(f"Payoff (left axis) and {greek} (right axis) with own scales.")
+                st.caption(f"Payoff (left axis) and {metric} (right axis) with own scales.")
 except ValueError as e:
     st.error(f"Error: {e}")
