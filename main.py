@@ -197,7 +197,7 @@ colors = {
 # Compute combined results
 try:
     if not st.session_state.legs:
-        st.warning("Add at least one option leg to compute.")
+        st.warning("Add at least one option leg to compute: Scroll down in the left bar")
     else:
         # Compute current values (at fixed S)
         combined_results = {'price': 0, 'delta': 0, 'gamma': 0, 'theta': 0, 'vega': 0, 'rho': 0}
