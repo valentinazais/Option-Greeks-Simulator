@@ -127,7 +127,7 @@ sigma = st.session_state['sigma']
 
 # Manage option legs using session state
 if 'legs' not in st.session_state:
-    st.session_state.legs = []  # List of dicts: {'type': 'call/put', 'strike': float, 'position': 1 (long) or -1 (short)}
+    st.session_state.legs = [{'type': 'call', 'strike': 100.0, 'position': 1}]  # List of dicts: {'type': 'call/put', 'strike': float, 'position': 1 (long) or -1 (short)}
 
 # Form to add a new leg
 st.sidebar.header("Add Option Leg")
