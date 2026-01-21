@@ -126,12 +126,15 @@ st.sidebar.slider("Volatility (sigma)", min_value=0.01, max_value=1.0, value=st.
 sigma = st.session_state['sigma']
 
 # Manage option legs using session state
-if 'legs' not in st.session_state:
-    # Initialize with one default leg so first visit shows a strategy
-    # Default: Long Call, Strike = current S (rounded), position = +1
-    default_strike = round(st.session_state.get('S', 100.0))
-    st.session_state.legs = [{'type': 'call', 'strike': float(default_strike), 'position': 1}]
-
+if 'legs' not in st.session_state or not st.session_state['legs']:
+    default_strike = float(round(st.session_state.get('S', 100.0)))
+    st.session_state['legs'] = [{
+        'type': 'call',        # 'call' or 'put'
+        'strike': default_strike,
+        'position': 1.0,       # positive = long, negative = short
+        'premium': 0.0         # initial premium (optional, can be updated by UI)
+    }]
+    
 # Form to add a new leg
 st.sidebar.header("Add Option Leg")
 new_type = st.sidebar.selectbox("Option Type", ["call", "put"], key="new_type")
@@ -164,7 +167,9 @@ show_separate = st.sidebar.checkbox("Show Separate Graphs for Each Metric with P
 
 # New: Add button to add a new single Metric + Payoff graph
 if 'single_plots' not in st.session_state:
-    st.session_state.single_plots = []  # List of metrics to plot individually
+    st.session_state['single_plots'] = []
+if 'added_leg_count' not in st.session_state:
+    st.session_state['added_leg_count'] = len(st.session_state['legs'])
 
 st.sidebar.header("Add Single Metric + Payoff Graph")
 single_metric = st.sidebar.selectbox("Select Metric", ["Delta", "Gamma", "Theta", "Vega", "Rho", "Time Value", "Premium"], key="single_metric")
