@@ -127,7 +127,10 @@ sigma = st.session_state['sigma']
 
 # Manage option legs using session state
 if 'legs' not in st.session_state:
-    st.session_state.legs = []
+    # Initialize with one default leg so first visit shows a strategy
+    # Default: Long Call, Strike = current S (rounded), position = +1
+    default_strike = round(st.session_state.get('S', 100.0))
+    st.session_state.legs = [{'type': 'call', 'strike': float(default_strike), 'position': 1}]
 
 # Form to add a new leg
 st.sidebar.header("Add Option Leg")
