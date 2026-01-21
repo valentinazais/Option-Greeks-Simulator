@@ -12,10 +12,10 @@ plt.style.use('ggplot')
 def black_scholes_option_price_and_greeks(S, K, T, r, q, sigma, option_type='call'):
     if T <= 0 or sigma <= 0:
         raise ValueError("Time to maturity and volatility must be positive.")
-    
+
     d1 = (math.log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
     d2 = d1 - sigma * math.sqrt(T)
-    
+
     if option_type.lower() == 'call':
         price = S * math.exp(-q * T) * norm.cdf(d1) - K * math.exp(-r * T) * norm.cdf(d2)
         delta = math.exp(-q * T) * norm.cdf(d1)
@@ -28,10 +28,10 @@ def black_scholes_option_price_and_greeks(S, K, T, r, q, sigma, option_type='cal
         rho = -K * T * math.exp(-r * T) * norm.cdf(-d2)
     else:
         raise ValueError("Option type must be 'call' or 'put'.")
-    
+
     gamma = math.exp(-q * T) * norm.pdf(d1) / (S * sigma * math.sqrt(T))
     vega = S * math.exp(-q * T) * norm.pdf(d1) * math.sqrt(T)
-    
+
     return {
         'price': price,
         'delta': delta,
@@ -126,15 +126,9 @@ st.sidebar.slider("Volatility (sigma)", min_value=0.01, max_value=1.0, value=st.
 sigma = st.session_state['sigma']
 
 # Manage option legs using session state
-if 'legs' not in st.session_state or not st.session_state['legs']:
-    default_strike = float(round(st.session_state.get('S', 100.0)))
-    st.session_state['legs'] = [{
-        'type': 'call',        # 'call' or 'put'
-        'strike': default_strike,
-        'position': 1.0,       # positive = long, negative = short
-        'premium': 0.0         # initial premium (optional, can be updated by UI)
-    }]
-    
+if 'legs' not in st.session_state:
+    st.session_state.legs = []  # List of dicts: {'type': 'call/put', 'strike': float, 'position': 1 (long) or -1 (short)}
+
 # Form to add a new leg
 st.sidebar.header("Add Option Leg")
 new_type = st.sidebar.selectbox("Option Type", ["call", "put"], key="new_type")
@@ -167,9 +161,7 @@ show_separate = st.sidebar.checkbox("Show Separate Graphs for Each Metric with P
 
 # New: Add button to add a new single Metric + Payoff graph
 if 'single_plots' not in st.session_state:
-    st.session_state['single_plots'] = []
-if 'added_leg_count' not in st.session_state:
-    st.session_state['added_leg_count'] = len(st.session_state['legs'])
+    st.session_state.single_plots = []  # List of metrics to plot individually
 
 st.sidebar.header("Add Single Metric + Payoff Graph")
 single_metric = st.sidebar.selectbox("Select Metric", ["Delta", "Gamma", "Theta", "Vega", "Rho", "Time Value", "Premium"], key="single_metric")
@@ -211,25 +203,25 @@ try:
         combined_results = {'price': 0, 'delta': 0, 'gamma': 0, 'theta': 0, 'vega': 0, 'rho': 0}
         combined_payoff = 0  # Payoff at expiration assuming S_T = current S
         combined_time_value = 0
-        
+
         for leg in st.session_state.legs:
             res = black_scholes_option_price_and_greeks(S, leg['strike'], T, r, q, sigma, leg['type'])
             sign = leg['position']
             for key in combined_results:
                 combined_results[key] += sign * res.get(key, 0)
-            
+
             # Payoff for this leg
             if leg['type'] == 'call':
                 payoff_leg = max(S - leg['strike'], 0)
             else:
                 payoff_leg = max(leg['strike'] - S, 0)
             combined_payoff += sign * payoff_leg
-            
+
             # Time value for this leg (Premium = Intrinsic Value + Time Value)
             # So Time Value = Premium - Intrinsic Value = Price - Payoff
             time_value_leg = res['price'] - payoff_leg
             combined_time_value += sign * time_value_leg
-        
+
         # Display numerical outputs
         st.header("Combined Strategy Values (at Current S)")
         col1, col2 = st.columns(2)
@@ -240,13 +232,13 @@ try:
         with col2:
             for greek in ['delta', 'gamma', 'theta', 'vega', 'rho']:
                 st.metric(greek.capitalize(), f"{combined_results[greek]:.4f}")
-        
+
         # Generate data for plots (vary S)
         S_range = np.linspace(max(50, S - 50), S + 50, 100)
-        
+
         # Dictionary to hold data for each plot
         plot_data = {plot_name: [] for plot_name in plot_options}  # Compute all to have them ready
-        
+
         for s in S_range:
             for plot_name in plot_options:
                 if plot_name == 'Payoff':
@@ -281,14 +273,14 @@ try:
                         value = res.get(plot_name.lower(), 0)
                         combined_value += leg['position'] * value
                 plot_data[plot_name].append(combined_value)
-        
+
         # Display combined plot with multiple y-axes (show all scales for exact values)
         if selected_plots:
             st.header("Combined Strategy Plot vs. Underlying Price (S)")
             fig, ax = plt.subplots(figsize=(10, 6))
             axes = [ax]  # List of axes, starting with the primary
             lines = []  # To collect lines for legend
-            
+
             for i, plot_name in enumerate(selected_plots):
                 if i == 0:
                     # First metric on primary axis (left)
@@ -304,19 +296,19 @@ try:
                     new_ax.tick_params(axis='y', colors=colors[plot_name])
                     axes.append(new_ax)
                 lines.append(line)
-            
+
             # Set common x-label and title
             ax.set_xlabel('Underlying Price (S)')
             ax.set_title('Combined Metrics (Each with Own Y-Scale)')
             ax.grid(True)
-            
+
             # Add legend
             ax.legend(lines, [line.get_label() for line in lines], loc='upper left')
-            
+
             # Display the plot in Streamlit
             st.pyplot(fig)
             st.caption("Each metric is plotted with its own y-axis scale for better visibility (primary on left; additional on right, spaced out). Colors are fixed for each metric. Plot styled for better aesthetics.")
-        
+
         # Separate graphs if checkbox is selected
         if show_separate:
             metrics_selected = [p for p in selected_plots if p != "Payoff"]
@@ -327,57 +319,57 @@ try:
                 for metric in metrics_selected:
                     st.subheader(f"{metric} and Payoff vs. Underlying Price (S)")
                     fig, ax = plt.subplots(figsize=(10, 6))
-                    
+
                     # Plot Payoff on left axis
                     ax.plot(S_range, plot_data["Payoff"], color=colors['Payoff'], label='Payoff')
                     ax.set_ylabel('Payoff', color=colors['Payoff'])
                     ax.tick_params(axis='y', colors=colors['Payoff'])
-                    
+
                     # Plot Metric on right axis
                     ax2 = ax.twinx()
                     ax2.plot(S_range, plot_data[metric], color=colors[metric], label=metric)
                     ax2.set_ylabel(metric, color=colors[metric])
                     ax2.tick_params(axis='y', colors=colors[metric])
-                    
+
                     ax.set_xlabel('Underlying Price (S)')
                     ax.set_title(f'{metric} and Payoff')
                     ax.grid(True)
-                    
+
                     # Combined legend
                     lines = ax.get_lines() + ax2.get_lines()
                     labels = [l.get_label() for l in lines]
                     ax.legend(lines, labels, loc='upper left')
-                    
+
                     st.pyplot(fig)
                     st.caption(f"Payoff (left axis) and {metric} (right axis) with own scales.")
-        
+
         # Display added single Metric + Payoff graphs
         if st.session_state.single_plots:
             st.header("Added Single Metric + Payoff Graphs")
             for metric in st.session_state.single_plots:
                 st.subheader(f"{metric} and Payoff vs. Underlying Price (S)")
                 fig, ax = plt.subplots(figsize=(10, 6))
-                
+
                 # Plot Payoff on left axis
                 ax.plot(S_range, plot_data["Payoff"], color=colors['Payoff'], label='Payoff')
                 ax.set_ylabel('Payoff', color=colors['Payoff'])
                 ax.tick_params(axis='y', colors=colors['Payoff'])
-                
+
                 # Plot Metric on right axis
                 ax2 = ax.twinx()
                 ax2.plot(S_range, plot_data[metric], color=colors[metric], label=metric)
                 ax2.set_ylabel(metric, color=colors[metric])
                 ax2.tick_params(axis='y', colors=colors[metric])
-                
+
                 ax.set_xlabel('Underlying Price (S)')
                 ax.set_title(f'{metric} and Payoff')
                 ax.grid(True)
-                
+
                 # Combined legend
                 lines = ax.get_lines() + ax2.get_lines()
                 labels = [l.get_label() for l in lines]
                 ax.legend(lines, labels, loc='upper left')
-                
+
                 st.pyplot(fig)
                 st.caption(f"Payoff (left axis) and {metric} (right axis) with own scales.")
 except ValueError as e:
